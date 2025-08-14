@@ -5,33 +5,44 @@ import fetch from 'node-fetch';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import nodemailer from 'nodemailer';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ✅ __dirname 대체 (ESM 환경)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // 환경 변수 로드
-// 환경 변수 로드
 dotenv.config();
+
 const corsOptions = {
   origin: '*',
   methods: ['POST'],
   credentials: true,
 };
+
 const app = express();
 app.use(bodyParser.json());
 app.use(cors(corsOptions));
 
 const PORT = process.env.PORT || 4000;
 
+// ✅ 정적 파일 서빙
+// public 폴더 안에 index.html, assets/, css/, js/ 등을 넣으면
+// http://localhost:4000/ 으로 바로 접근 가능
+app.use(express.static(path.join(__dirname, 'public')));
 
 export const mailer = nodemailer.createTransport({
-  host: process.env.SES_SMTP_ENDPOINT, // 예: us-east-1
-  port: 587, // TLS
-  secure: false, // 587은 false, 465는 true
+  host: process.env.SES_SMTP_ENDPOINT,
+  port: 587,
+  secure: false,
   auth: {
-    user: process.env.SES_SMTP_USER,     // SES에서 발급한 SMTP 유저
-    pass: process.env.SES_SMTP_PASSWORD, // SES에서 발급한 SMTP 패스워드
+    user: process.env.SES_SMTP_USER,
+    pass: process.env.SES_SMTP_PASSWORD,
   },
 });
 
-// ✅ 문자 전송 함수
+// 문자 전송 함수
 async function sendSMS({ phone, message, sender, msg_type = 'SMS', title = '' }) {
   console.log('📨 알리고 API 호출 직전:', phone);
   const res = await fetch('https://apis.aligo.in/send/', {
@@ -68,13 +79,15 @@ app.post('/mail', async (req, res) => {
       subject: '테스트 메일(API)',
       html: '<p>SES API 경유</p>',
     });
+
+    return res.json({ success: true });
   } catch (err) {
     console.error('❌ 서버 오류:', err);
     return res.status(500).json({ error: '서버 오류 발생' });
   }
 });
 
-// ✅ 문자 전송 라우터
+// 문자 전송 라우터
 app.post('/sms', async (req, res) => {
   try {
     const { phone, message } = req.body;
@@ -108,6 +121,11 @@ app.post('/sms', async (req, res) => {
     console.error('❌ 서버 오류:', err);
     return res.status(500).json({ error: '서버 오류 발생' });
   }
+});
+
+// ✅ SPA 지원 (public/index.html 기본 제공)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.listen(PORT, () => {
